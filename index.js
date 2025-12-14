@@ -225,7 +225,56 @@ async function run() {
                 });
             }
         });
+        //
+        app.patch('/product/:id/shp', async (req, res) => {
+            try {
+                const { id } = req.params;
+                const { SHP } = req.body; 
 
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Invalid product ID",
+                    });
+                }
+
+                if (SHP === undefined || SHP === null) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "SHP field is required",
+                    });
+                }
+
+                const query = { id };
+                const update = {
+                    $set: { SHP }
+                };
+
+                const result = await productCollection.updateOne( );
+
+                if (result.matchedCount === 0) {
+                    return res.status(404).json({
+                        success: false,
+                        message: "Product not found",
+                    });
+                }
+
+                const updatedProduct = await productCollection.findOne();
+
+                res.status(200).json({
+                    success: true,
+                    message: "SHP updated successfully",
+                    data: updatedProduct,
+                });
+
+            } catch (error) {
+                console.error("Update SHP error:", error);
+                res.status(500).json({
+                    success: false,
+                    message: "Internal server error",
+                });
+            }
+        });
 
         //Product Api end
 
