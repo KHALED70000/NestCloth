@@ -226,7 +226,7 @@ async function run() {
             }
         });
         //
-        app.patch('/product/:id/shp', async (req, res) => {
+        app.patch('/product/:id/shp', varifyFBtoken, async (req, res) => {
             try {
                 const { id } = req.params;
                 const { SHP } = req.body; 
@@ -250,7 +250,7 @@ async function run() {
                     $set: { SHP }
                 };
 
-                const result = await productCollection.updateOne( update);
+                const result = await productCollection.updateOne(query, update);
 
                 if (result.matchedCount === 0) {
                     return res.status(404).json({
@@ -275,7 +275,7 @@ async function run() {
                 });
             }
         });
-
+        
         //Product Api end
 
         //Banner api
@@ -354,8 +354,8 @@ async function run() {
         /////AL API HERE END/////
 
 
-        await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        // await client.db("admin").command({ ping: 1 });
+        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
         // await client.close();
