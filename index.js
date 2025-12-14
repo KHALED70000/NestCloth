@@ -245,7 +245,7 @@ async function run() {
                     });
                 }
 
-                const query = { _id: new ObjectId() };
+                const query = { _id: new ObjectId(id) };
                 const update = {
                     $set: { SHP }
                 };
@@ -259,7 +259,7 @@ async function run() {
                     });
                 }
 
-                const updatedProduct = await productCollection.findOne();
+                const updatedProduct = await productCollection.findOne(query);
 
                 res.status(200).json({
                     success: true,
