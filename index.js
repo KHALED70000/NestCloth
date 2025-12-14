@@ -2,15 +2,25 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const { MongoClient, ServerApiVersion } = require('mongodb');
-
 const app = express();
 const port = process.env.PORT || 5000;
+//Firebase Admin SDK
+const admin = require("firebase-admin");
 
+const serviceAccount = require("./NestCloth-firebase-admin-SDK.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+//Firebase Admin SDK end
 
 //middleware
 app.use(express.json());
 app.use(cors());
 //middleware end
+
+
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.7ptsepf.mongodb.net/?appName=Cluster0`;
