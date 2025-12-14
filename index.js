@@ -245,7 +245,7 @@ async function run() {
                     });
                 }
 
-                const query = { id };
+                const query = { _id: new ObjectId() };
                 const update = {
                     $set: { SHP }
                 };
