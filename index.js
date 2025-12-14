@@ -164,12 +164,69 @@ async function run() {
 
         //UserS api end
 
+
+
         //Product Api
-        app.post('/product', async(req, res) => {
+        app.post('/product', async (req, res) => {
             const newProduct = req.body;
+
+            newProduct.SHP = false
+            newProduct.createdAt = new Date();
+
             const result = await productCollection.insertOne(newProduct);
             res.send(result)
-        })
+        });
+        app.get('/products', async (req, res) => {
+            try {
+                const result = await productCollection.find().sort({ createdAt: -1 }).toArray();
+                res.send(result);
+
+            } catch (error) {
+                console.error(error);
+                res.status(500).json({
+                    success: false,
+                    message: "Internal server error"
+                });
+            }
+        });
+        //
+        app.get('/product/:id', async (req, res) => {
+            try {
+                const { id } = req.params;
+
+                // ObjectId validation
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Invalid product ID",
+                    });
+                }
+
+                const query = { _id: new ObjectId(id) };
+                const result = await productCollection.findOne(query);
+
+                if (!result) {
+                    return res.status(404).json({
+                        success: false,
+                        message: "Product not found",
+                    });
+                }
+
+                res.status(200).json({
+                    success: true,
+                    data: result,
+                });
+
+            } catch (error) {
+                console.error("Get product error:", error);
+                res.status(500).json({
+                    success: false,
+                    message: "Internal server error",
+                });
+            }
+        });
+
+
         //Product Api end
 
         //Banner api
