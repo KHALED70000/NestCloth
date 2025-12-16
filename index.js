@@ -371,7 +371,22 @@ async function run() {
                 res.status(500).send({ error: true });
             }
         });
+        //manage product api
+        app.patch('/order', async(req, res) => {
+            const orderId = req.query.orderId;
+            const status = req.query.status;
 
+            const update = {
+                $set: {
+                    status: status
+                }
+            }
+            const query = await orderCollection.findOne({_id: new ObjectId(orderId)});
+
+            const result = await orderCollection.updateOne(query, update);
+
+            res.send(result)
+        })
 
         //Order Booking Api end
 
