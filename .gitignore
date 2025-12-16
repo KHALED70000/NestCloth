@@ -1,3 +1,4 @@
 node_modules
 .env
 NestCloth-firebase-admin-SDK.json
+.vercel

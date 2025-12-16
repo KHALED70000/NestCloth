@@ -6,13 +6,19 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 //Firebase Admin SDK
-const admin = require("firebase-admin");
 
+const admin = require("firebase-admin");
 const serviceAccount = require("./NestCloth-firebase-admin-SDK.json");
+
+// const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf8');//vercel deploy er jnn lage
+// const serviceAccount = JSON.parse(decoded);//vercel deploy er jnn lage
+
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
 });
 //Firebase Admin SDK end
+
+
 
 //varify ID token
 const varifyFBtoken = async (req, res, next) => {
@@ -56,11 +62,12 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // await client.connect();
 
         const db = client.db('NestCloth');
         const userCollection = db.collection('userDB');
-        const productCollection = db.collection('Products')
+        const productCollection = db.collection('Products');
+        const orderCollection = db.collection('Orders');
         const BannerCollection = db.collection('Banners');
 
 
@@ -119,20 +126,20 @@ async function run() {
             res.send({ role: user?.role || 'buyer' });
         });
         //
-        app.get('/allusers', varifyFBtoken, async (req, res) => {
+        // app.get('/allusers', varifyFBtoken, async (req, res) => {
 
-            const searchText = req.query.searchText;
-            const query = {};
-            if (searchText) {
-                query.$or = [
-                    { displayName: { $regex: searchText, $options: 'i' } },
-                    { email: { $regex: searchText, $options: 'i' } }
-                ];
-            }
-            const cursor = userCollection.find(query).sort({ createdAt: -1 });
-            const result = await cursor.toArray();
-            res.send(result);
-        });
+        //     const searchText = req.query.searchText;
+        //     const query = {};
+        //     if (searchText) {
+        //         query.$or = [
+        //             { displayName: { $regex: searchText, $options: 'i' } },
+        //             { email: { $regex: searchText, $options: 'i' } }
+        //         ];
+        //     }
+        //     const cursor = userCollection.find(query).sort({ createdAt: -1 });
+        //     const result = await cursor.toArray();
+        //     res.send(result);
+        // });
         //
         app.get('/allusers', async (req, res) => {
             try {
@@ -168,14 +175,58 @@ async function run() {
 
         //Product Api
         app.post('/product', async (req, res) => {
-            const newProduct = req.body;
+            try {
+                const {
+                    ProductName,
+                    Category,
+                    Price,
+                    AQ,
+                    MOQ,
+                    paymentOptions,
+                    photos,
+                    productDecriiption
+                } = req.body;
 
-            newProduct.SHP = false
-            newProduct.createdAt = new Date();
+                // Basic validation (proof-based necessity)
+                if (!ProductName || !Category || !Price || !photos?.length) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Required fields missing"
+                    });
+                }
 
-            const result = await productCollection.insertOne(newProduct);
-            res.send(result)
+                const newProduct = {
+                    ProductName,
+                    Category,
+                    Price: Number(Price),
+                    AOQ: Number(AQ),
+                    MOQ: Number(MOQ),
+                    paymentOptions,
+                    photos,
+                    productDecriiption,
+                    // server-controlled fields
+                    SHP: false,
+                    status: "pending",
+                    createdAt: new Date()
+                };
+
+                const result = await productCollection.insertOne(newProduct);
+
+                res.status(201).json({
+                    success: true,
+                    insertedId: result.insertedId
+                });
+
+            } catch (error) {
+                console.error("Product create error:", error);
+                res.status(500).json({
+                    success: false,
+                    message: "Internal server error"
+                });
+            }
         });
+
+        //
         app.get('/products', async (req, res) => {
             try {
                 const result = await productCollection.find().sort({ createdAt: -1 }).toArray();
@@ -229,7 +280,7 @@ async function run() {
         app.patch('/product/:id/shp', varifyFBtoken, async (req, res) => {
             try {
                 const { id } = req.params;
-                const { SHP } = req.body; 
+                const { SHP } = req.body;
 
                 if (!ObjectId.isValid(id)) {
                     return res.status(400).json({
@@ -275,8 +326,54 @@ async function run() {
                 });
             }
         });
-        
+
         //Product Api end
+
+        //Order Booking Api
+        app.post('/order', async (req, res) => {
+            const newOrder = req.body;
+            newOrder.status = 'pending';
+            newOrder.createdAt = new Date();
+            const result = await orderCollection.insertOne(newOrder);
+            res.send(result)
+        })
+        //
+        app.get('/orders', async (req, res) => {
+            try {
+                const status = req.query.status;
+
+                let query = {};
+                if (status) {
+                    query = { status };
+                }
+
+                const orders = await orderCollection
+                    .find(query)
+                    .sort({ createdAt: -1 })
+                    .toArray();
+
+                const enrichedOrders = await Promise.all(
+                    orders.map(async (order) => {
+                        const product = await productCollection.findOne({
+                            _id: new ObjectId(order.Product_id),
+                        });
+
+                        return {
+                            ...order,
+                            ProductPhotos: product?.photos || [],
+                            ProductPaymentMode: product?.paymentOptions || null,
+                        };
+                    })
+                );
+
+                res.send(enrichedOrders);
+            } catch (error) {
+                res.status(500).send({ error: true });
+            }
+        });
+
+
+        //Order Booking Api end
 
         //Banner api
         app.post("/banners", async (req, res) => {
@@ -354,8 +451,9 @@ async function run() {
         /////AL API HERE END/////
 
 
-        // await client.db("admin").command({ ping: 1 });
-        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        await client.db("admin").command({ ping: 1 });
+        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+
     } finally {
         // Ensures that the client will close when you finish/error
         // await client.close();
