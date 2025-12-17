@@ -387,6 +387,12 @@ async function run() {
 
             res.send(result)
         })
+        //
+        app.delete('/order/:id', async(req, res)=>{
+            const orderId = req.params.id;
+            const result = await orderCollection.deleteOne({_id: new ObjectId(orderId)});
+            res.send(result);
+        })
 
         //Order Booking Api end
 
