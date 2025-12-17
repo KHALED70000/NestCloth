@@ -344,7 +344,7 @@ async function run() {
 
                 let query = {};
                 if (status) {
-                    query = { status };
+                    query = { status: status };
                 }
 
                 const orders = await orderCollection
@@ -371,32 +371,79 @@ async function run() {
                 res.status(500).send({ error: true });
             }
         });
-        //manage product api
-        app.patch('/order', async(req, res) => {
+        //
+        app.get('/order/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+                const cursor = { _id: new ObjectId(id) }
+                const result = await orderCollection.findOne(cursor);
+
+                res.send(result) 
+            }
+            catch (err) {
+                res.status(500).send({ err: true });
+            }
+        })
+        //
+        app.patch('/order', async (req, res) => {
             const orderId = req.query.orderId;
             const status = req.query.status;
 
             const update = {
                 $set: {
-                    status: status
+                    status: status,
+                    approvedAt: new Date()
                 }
             }
-            const query = await orderCollection.findOne({_id: new ObjectId(orderId)});
+            const query = { _id: new ObjectId(orderId) };
 
             const result = await orderCollection.updateOne(query, update);
 
             res.send(result)
         })
         //
-        app.delete('/order/:id', async(req, res)=>{
-            const orderId = req.params.id;
-            const result = await orderCollection.deleteOne({_id: new ObjectId(orderId)});
-            res.send(result);
-        })
+        app.patch('/order/:orderId', async (req, res) => {
+            const { orderId } = req.params;
+            const { place, location } = req.query;
+
+            try {
+                const order = await orderCollection.findOne({ _id: new ObjectId(orderId) });
+                if (!order) return res.status(404).send({ error: "Order not found" });
+
+                // Current Trackings object
+                const currentTrackings = order.Trackings || {};
+
+                // Only add if key doesn't exist
+                if (!(place in currentTrackings)) {
+                    currentTrackings[place] = location;
+                }
+
+                // Update in DB
+                const result = await orderCollection.updateOne(
+                    { _id: new ObjectId(orderId) },
+                    { $set: { Trackings: currentTrackings } }
+                );
+
+                res.send({ success: true, result });
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({ error: true });
+            }
+        });
+
+
+
+
+        // app.delete('/order/:id', async(req, res)=>{
+        //     const orderId = req.params.id;
+        //     const result = await orderCollection.deleteOne({_id: new ObjectId(orderId)});
+        //     res.send(result);
+        // })
 
         //Order Booking Api end
 
         //Banner api
+
         app.post("/banners", async (req, res) => {
             try {
                 const newBanner = req.body;
