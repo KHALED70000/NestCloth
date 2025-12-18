@@ -178,6 +178,7 @@ async function run() {
             try {
                 const {
                     ProductName,
+                    ManagerEmail,
                     Category,
                     Price,
                     AQ,
@@ -188,7 +189,7 @@ async function run() {
                 } = req.body;
 
                 // Basic validation (proof-based necessity)
-                if (!ProductName || !Category || !Price || !photos?.length) {
+                if (!ProductName || !ManagerEmail || !Category || !Price || !photos?.length) {
                     return res.status(400).json({
                         success: false,
                         message: "Required fields missing"
@@ -197,6 +198,7 @@ async function run() {
 
                 const newProduct = {
                     ProductName,
+                    ManagerEmail,
                     Category,
                     Price: Number(Price),
                     AOQ: Number(AQ),
@@ -229,7 +231,12 @@ async function run() {
         //
         app.get('/products', async (req, res) => {
             try {
-                const result = await productCollection.find().sort({ createdAt: -1 }).toArray();
+                const ManagerEmail = req.query.email;
+                let query = {};
+                if (ManagerEmail) {
+                    query = { ManagerEmail: ManagerEmail }
+                }
+                const result = await productCollection.find(query).sort({ createdAt: -1 }).toArray();
                 res.send(result);
 
             } catch (error) {
@@ -276,6 +283,102 @@ async function run() {
                 });
             }
         });
+        //
+        // DELETE single image from product photos
+        app.patch('/product/:id/remove-photo', async (req, res) => {
+            try {
+                const { id } = req.params;
+                const { photoUrl } = req.body;
+
+                if (!photoUrl) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'photoUrl is required'
+                    });
+                }
+
+                const result = await productCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    {
+                        $pull: { photos: photoUrl }
+                    }
+                );
+
+                if (result.matchedCount === 0) {
+                    return res.status(404).json({
+                        success: false,
+                        message: 'Product not found'
+                    });
+                }
+
+                res.json({
+                    success: true,
+                    message: 'Photo removed successfully'
+                });
+
+            } catch (error) {
+                res.status(500).json({
+                    success: false,
+                    message: error.message
+                });
+            }
+        });
+        //
+        app.patch('/product/:id/Update-Product', async (req, res) => {
+            try {
+                const { id } = req.params;
+
+                const {
+                    ProductName,
+                    Price,
+                    AQ,
+                    MOQ,
+                    paymentOptions,
+                    productDecriiption,
+                    Category,
+                    photos
+                } = req.body;
+
+                const updateDoc = {
+                    $set: {
+                        ...(ProductName && { ProductName }),
+                        ...(Price !== undefined && { Price: Number(Price) }),
+                        ...(AQ !== undefined && { AOQ: Number(AQ) }),
+                        ...(MOQ !== undefined && { MOQ: Number(MOQ) }),
+                        ...(paymentOptions && { paymentOptions }),
+                        ...(productDecriiption && { productDecriiption }),
+                        ...(Category && { Category }),
+                    },
+                };
+
+                if (photos && Array.isArray(photos) && photos.length > 0) {
+                    updateDoc.$addToSet = {
+                        photos: {
+                            $each: photos
+                        }
+                    };
+                }
+
+                const result = await productCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    updateDoc
+                );
+
+                res.json({
+                    success: true,
+                    message: "Product updated successfully",
+                    result
+                });
+
+            } catch (error) {
+                console.error(error);
+                res.status(500).json({
+                    success: false,
+                    message: "Internal server error"
+                });
+            }
+        });
+
         //
         app.patch('/product/:id/shp', varifyFBtoken, async (req, res) => {
             try {
@@ -378,7 +481,7 @@ async function run() {
                 const cursor = { _id: new ObjectId(id) }
                 const result = await orderCollection.findOne(cursor);
 
-                res.send(result) 
+                res.send(result)
             }
             catch (err) {
                 res.status(500).send({ err: true });
