@@ -143,7 +143,12 @@ async function run() {
         //
         app.get('/allusers', async (req, res) => {
             try {
-                const result = await userCollection.find().sort({ createdAt: -1 }).toArray();
+                const {status} = req.query;
+                let query = {}
+                if(status){
+                    query = {status: status}
+                }
+                const result = await userCollection.find(query).sort({ createdAt: -1 }).toArray();
                 res.status(200).json(result);
 
             } catch (error) {
@@ -168,7 +173,59 @@ async function run() {
             const udatedUser = await userCollection.findOne(query)
             res.send(result);
         });
+        //
+        app.get('/UIMode', async (req, res) => {
+            try {
+                const email = req.query.email;
+                if (!email) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Email is Missing",
+                    });
+                }
+                const query = { email };
+                const result = await userCollection.findOne(query);
 
+                // console.log(result.UImode)
+
+                res.send(result.UImode)
+            }
+            catch (error) {
+                if (error) {
+                    return res.status(500).json({
+                        success: false,
+                        message: "Internal server error"
+                    });
+                }
+            }
+        })
+        //
+        app.patch('/UImode', async (req, res) => {
+            try {
+                const email = req.query.email;
+                const {UImode} = req.body;
+                if (!email) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Email is Missing",
+                    });
+                }
+
+                const result = await userCollection.updateOne({ email }, { $set: { UImode } })
+
+                res.send(result)
+
+            }
+            catch (error) {
+                if (error) {
+                    return res.status(500).json({
+                        success: false,
+                        message: error.message
+                    });
+                }
+            }
+
+        })
         //UserS api end
 
 
@@ -232,10 +289,17 @@ async function run() {
         app.get('/products', async (req, res) => {
             try {
                 const ManagerEmail = req.query.email;
+                const status = req.query.status;
                 let query = {};
+
                 if (ManagerEmail) {
-                    query = { ManagerEmail: ManagerEmail }
+                    query.ManagerEmail = ManagerEmail;
                 }
+
+                if (status) {
+                    query.status = status;
+                }
+
                 const result = await productCollection.find(query).sort({ createdAt: -1 }).toArray();
                 res.send(result);
 
@@ -247,6 +311,7 @@ async function run() {
                 });
             }
         });
+
         //
         app.get('/product/:id', async (req, res) => {
             try {
@@ -378,12 +443,40 @@ async function run() {
                 });
             }
         });
+        //
+        app.delete('/product/:id', async (req, res) => {
+            try {
+                const { id } = req.params;
+                const cursor = { _id: new ObjectId(id) };
+                const result = await productCollection.deleteOne(cursor);
+
+                if (result.deletedCount === 0) {
+                    return res.status(404).json({
+                        success: false,
+                        message: "Product not found"
+                    });
+                }
+
+                res.json({
+                    success: true,
+                    message: "Product deleted successfully",
+                    result
+                });
+            } catch (error) {
+                console.error(error);
+                res.status(500).json({
+                    success: false,
+                    message: "Internal server error"
+                });
+            }
+        });
 
         //
-        app.patch('/product/:id/shp', varifyFBtoken, async (req, res) => {
+        app.patch('/product/:id/shp', async (req, res) => {
             try {
                 const { id } = req.params;
                 const { SHP } = req.body;
+
 
                 if (!ObjectId.isValid(id)) {
                     return res.status(400).json({
@@ -398,6 +491,8 @@ async function run() {
                         message: "SHP field is required",
                     });
                 }
+
+                console.log(id, SHP) 
 
                 const query = { _id: new ObjectId(id) };
                 const update = {
@@ -425,7 +520,7 @@ async function run() {
                 console.error("Update SHP error:", error);
                 res.status(500).json({
                     success: false,
-                    message: "Internal server error",
+                    message: error.message,
                 });
             }
         });
@@ -465,6 +560,8 @@ async function run() {
                             ...order,
                             ProductPhotos: product?.photos || [],
                             ProductPaymentMode: product?.paymentOptions || null,
+                            AOQ: product?.AOQ || null,
+                            MOQ: product?.MOQ || null,
                         };
                     })
                 );
@@ -475,11 +572,120 @@ async function run() {
             }
         });
         //
-        app.get('/order/:id', async (req, res) => {
+
+        app.get('/CurrentUserOrders', async (req, res) => {
+            try {
+                const { email, status } = req.query;
+
+                if (!email) {
+                    return res.status(400).send({
+                        error: true,
+                        message: 'Email is required'
+                    });
+                }
+
+                let query = { BuyerEmail: email };
+
+                if (status) {
+                    query.status = status;
+                }
+
+
+                const orders = await orderCollection
+                    .find(query)
+                    .sort({ createdAt: -1 })
+                    .toArray();
+
+                const enrichedOrders = await Promise.all(
+                    orders.map(async (order) => {
+                        const product = await productCollection.findOne({
+                            _id: new ObjectId(order.Product_id),
+                        });
+
+                        return {
+                            ...order,
+                            ProductPhotos: product?.photos || [],
+                            ProductPaymentMode: product?.paymentOptions || null,
+                            AOQ: product?.AOQ || null,
+                            MOQ: product?.MOQ || null,
+                        };
+                    })
+                );
+
+                res.send(enrichedOrders);
+            } catch (error) {
+                res.status(500).send({ error: true, error: 'BAler Fuk er' });
+            }
+        });
+
+        //
+
+        app.get('/EditOrder/:id', async (req, res) => {
+            try {
+                const { id } = req.params;
+
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).send({
+                        success: false,
+                        message: "Invalid order ID"
+                    });
+                }
+
+                // const orders = await orderCollection.find({ _id: new ObjectId(id) })
+
+                const result = await orderCollection.findOne({ _id: new ObjectId(id) });
+
+                if (!result) {
+                    return res.status(404).send({
+                        success: false,
+                        message: "Order not found"
+                    });
+                }
+
+                const OrderedProductId = { _id: new ObjectId(result.Product_id) }
+                const ORDER = await productCollection.findOne(OrderedProductId)
+
+                result.AOQ = ORDER.AOQ;
+                result.MOQ = ORDER.MOQ;
+
+                res.status(200).send({
+                    success: true,
+                    data: result
+                });
+
+            } catch (error) {
+                res.status(500).send({
+                    success: false,
+                    message: "Internal server error"
+                });
+            }
+        });
+
+        //
+        app.delete('/order/:id', async (req, res) => {
             try {
                 const id = req.params.id;
                 const cursor = { _id: new ObjectId(id) }
-                const result = await orderCollection.findOne(cursor);
+                const result = await orderCollection.deleteOne(cursor);
+
+                res.send(result)
+            }
+            catch (err) {
+                res.status(500).send({ err: true });
+            }
+        })
+
+        app.patch('/order/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+                const UpdatedOrderInfo = req.body;
+                const query = { _id: new ObjectId(id) }
+
+                const update = {
+                    $set: UpdatedOrderInfo,
+                }
+
+                const result = await orderCollection.updateOne(query, update);
 
                 res.send(result)
             }
@@ -489,6 +695,7 @@ async function run() {
         })
         //
         app.patch('/order', async (req, res) => {
+
             const orderId = req.query.orderId;
             const status = req.query.status;
 
@@ -505,7 +712,7 @@ async function run() {
             res.send(result)
         })
         //
-        app.patch('/order/:orderId', async (req, res) => {
+        app.patch('/CuttingUpdateOrder/:orderId', async (req, res) => {
             const { orderId } = req.params;
             const { place, location } = req.query;
 
